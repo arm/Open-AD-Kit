@@ -1,0 +1,277 @@
+From db3a19687ed017e535d6d18504b9ed30ffa0619e Mon Sep 17 00:00:00 2001
+From: Ubuntu <ubuntu@ip-192-168-15-227.eu-west-1.compute.internal>
+Date: Wed, 19 Mar 2025 16:21:58 +0000
+Subject: [PATCH] Configuration of OpenADKit
+
+enable 16 CPU and 16GB of RAM
+
+set the rootfs size at 31GB
+
+enable the Framebuffer + Keyboard
+
+enable podman-compose
+
+include benchmarking tools
+
+include X11 graphic backend
+
+include kernel compilation tool
+
+include trace-cmd
+---
+ yocto/kas/arm-auto-solutions.yml              |  8 +++--
+ yocto/kas/arm-bsp-extras.yml                  | 33 +++++++++++++++++--
+ ...t-the-branch-name-for-podmad-compose.patch | 25 ++++++++++++++
+ .../conf/multiconfig/domu.conf                |  2 +-
+ .../recipes-core/domu-package/domu-envs.inc   |  2 +-
+ .../recipes-extended/xen-cfg/xen-cfg.bb       |  2 +-
+ .../files/fvp-rd-kronos/rdkronos.dts          | 20 ++++++++++-
+ .../trusted-firmware-m-fvp-rd-kronos.inc      |  2 +-
+ .../bsp/arm-platforms-extra/fvp-rd-kronos.cfg | 18 ++++++++++
+ .../wic/fvp-rd-kronos-efi-disk.wks.in         |  2 +-
+ 10 files changed, 103 insertions(+), 11 deletions(-)
+ create mode 100644 yocto/kas/patches/meta-virtualization/0001-Correct-the-branch-name-for-podmad-compose.patch
+
+diff --git a/yocto/kas/arm-auto-solutions.yml b/yocto/kas/arm-auto-solutions.yml
+index 8640276..4aa20b6 100644
+--- a/yocto/kas/arm-auto-solutions.yml
++++ b/yocto/kas/arm-auto-solutions.yml
+@@ -30,13 +30,15 @@ repos:
+ 
+ env:
+   TESTIMAGE_AUTO:
+-  SVE_DISABLE_FLAG:
+-  CASSINI_ROOTFS_EXTRA_SPACE:
+-  BAREMETAL_IMAGE_MEM_SIZE:
++  SVE_DISABLE_FLAG: "0"
++  CASSINI_ROOTFS_EXTRA_SPACE: "20000000"
++  BAREMETAL_IMAGE_MEM_SIZE: "16352M"
++  BAREMETAL_IMAGE_NUM_CPUS: "16"
+   DOM0_MEMORY_SIZE:
+   DOMU1_MEMORY_SIZE:
+   DOMU2_MEMORY_SIZE:
+ 
++
+ local_conf_header:
+   cassini: |
+     CASSINI_GENERIC_ARM64_FILESYSTEM = "0"
+diff --git a/yocto/kas/arm-bsp-extras.yml b/yocto/kas/arm-bsp-extras.yml
+index 5042374..6f693ba 100644
+--- a/yocto/kas/arm-bsp-extras.yml
++++ b/yocto/kas/arm-bsp-extras.yml
+@@ -27,6 +27,13 @@ repos:
+         path: "yocto/kas/patches/meta-arm/\
+           0001-arm-lib-Handle-timeout-for-spawn-object-on-stop.patch"
+ 
++  meta-virtualization:
++   path: layers/meta-virtualization
++   patches:
++     0001-Correct-the-branch-name-for-podmad-compose.patch:
++        repo: sw-ref-stack
++        path: "yocto/kas/patches/meta-virtualization/0001-Correct-the-branch-name-for-podmad-compose.patch"
++
+   meta-openembedded:
+     layers:
+       meta-python:
+@@ -44,15 +51,37 @@ env:
+   FVP_SERVER_URL:
+   FVP_SERVER_USER:
+   SVE_DISABLE_FLAG: "0"
+-  WAYLAND_DISPLAY:
+   XAUTHORITY:
+ 
+ local_conf_header:
+   base: |
+-    EXTRA_IMAGE_FEATURES:append = " debug-tweaks ssh-server-openssh"
++    EXTRA_IMAGE_FEATURES:append = " debug-tweaks ssh-server-openssh  "
++    EXTRA_IMAGE_FEATURES:append = " tools-sdk "
+     CORE_IMAGE_EXTRA_INSTALL:append = " ssh-pregen-hostkeys"
+     LICENSE_FLAGS_ACCEPTED:append = " \
+       ${@oe.utils.vartrue('ARM_FVP_EULA_ACCEPT', 'Arm-FVP-EULA', '', d)}"
+     IMAGE_CLASSES += "testimage"
++    # To enable docker + docker compose
++    #PACKAGECONFIG:remove:pn-docker-compose = "docker-plugin"
++    #CORE_IMAGE_EXTRA_INSTALL:append = " docker docker-compose "
++    #PACKAGE_EXCLUDE:append = "podman no-cloud "
++    
++    CORE_IMAGE_EXTRA_INSTALL:append = " git nano "
++
++    #Add X11 support
++    DISTRO_FEATURES:append = " x11"
++    CORE_IMAGE_EXTRA_INSTALL:append = " xauth xhost xterm xinit xclock fbset openbox obconf "
++    CORE_IMAGE_EXTRA_INSTALL:append = " packagegroup-core-x11-base xserver-xorg "
++    # Disk utilities
++    CORE_IMAGE_EXTRA_INSTALL:append = " e2fsprogs e2fsprogs-mke2fs e2fsprogs-resize2fs"
++    # Add benchmark 
++    CORE_IMAGE_EXTRA_INSTALL:append = " stress-ng  dbench dhrystone fio iozone3 iperf2 iperf3 lmbench mbw memtester stressapptest tinymembench tiobench whetstone"
++    CORE_IMAGE_EXTRA_INSTALL:append = " htop iotop "
++    # To build the linux kernel
++    CORE_IMAGE_EXTRA_INSTALL:append = " packagegroup-core-buildessential flex bison bc openssl-dev libelf rsync perl perl-modules"
++    # To trace the kernel
++    CORE_IMAGE_EXTRA_INSTALL:append = " trace-cmd"
+ 
++    # Add podman-compose    
++    CORE_IMAGE_EXTRA_INSTALL:append = " podman podman-compose"
+ distro: nodistro
+diff --git a/yocto/kas/patches/meta-virtualization/0001-Correct-the-branch-name-for-podmad-compose.patch b/yocto/kas/patches/meta-virtualization/0001-Correct-the-branch-name-for-podmad-compose.patch
+new file mode 100644
+index 0000000..6ef1658
+--- /dev/null
++++ b/yocto/kas/patches/meta-virtualization/0001-Correct-the-branch-name-for-podmad-compose.patch
+@@ -0,0 +1,25 @@
++From 4a60b2d8afe2d60dbea1096e82996793dbb13a34 Mon Sep 17 00:00:00 2001
++From: Ubuntu <ubuntu@ip-192-168-15-227.eu-west-1.compute.internal>
++Date: Thu, 27 Feb 2025 10:20:55 +0000
++Subject: [PATCH] Correct the branch name for podmad-compose
++
++---
++ recipes-containers/podman-compose/podman-compose_1.0.6.bb | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++diff --git a/recipes-containers/podman-compose/podman-compose_1.0.6.bb b/recipes-containers/podman-compose/podman-compose_1.0.6.bb
++index e055ee45..bcb2b86b 100644
++--- a/recipes-containers/podman-compose/podman-compose_1.0.6.bb
+++++ b/recipes-containers/podman-compose/podman-compose_1.0.6.bb
++@@ -4,7 +4,7 @@ LIC_FILES_CHKSUM = "file://LICENSE;md5=b234ee4d69f5fce4486a80fdaf4a4263"
++ 
++ inherit setuptools3
++ 
++-SRC_URI = "git://github.com/containers/podman-compose.git;branch=stable;protocol=https"
+++SRC_URI = "git://github.com/containers/podman-compose.git;branch=main;protocol=https"
++ 
++ SRCREV = "f6dbce36181c44d0d08b6f4ca166508542875ce1"
++ 
++-- 
++2.43.0
++
+diff --git a/yocto/meta-arm-auto-solutions/conf/multiconfig/domu.conf b/yocto/meta-arm-auto-solutions/conf/multiconfig/domu.conf
+index 305ea4e..166262b 100644
+--- a/yocto/meta-arm-auto-solutions/conf/multiconfig/domu.conf
++++ b/yocto/meta-arm-auto-solutions/conf/multiconfig/domu.conf
+@@ -30,7 +30,7 @@ EFI_PROVIDER = ""
+ # Currently, poky comes with a default value for INITRAMFS_MAXSIZE of
+ # 131072(K). To add more packages, increase the INITRAMFS_MAXSIZE to 600000(K).
+ # Note: The INITRAMFS_MAXSIZE value should be less that 1/2 of the ram size.
+-INITRAMFS_MAXSIZE = "600000"
++INITRAMFS_MAXSIZE = "2000000"
+ 
+ # Don't create a separate initramfs bundle
+ INITRAMFS_IMAGE = ""
+diff --git a/yocto/meta-arm-auto-solutions/recipes-core/domu-package/domu-envs.inc b/yocto/meta-arm-auto-solutions/recipes-core/domu-package/domu-envs.inc
+index 56ec5a5..b4ebbf9 100644
+--- a/yocto/meta-arm-auto-solutions/recipes-core/domu-package/domu-envs.inc
++++ b/yocto/meta-arm-auto-solutions/recipes-core/domu-package/domu-envs.inc
+@@ -35,7 +35,7 @@ DOMU1_NUMBER_OF_CPUS ?= "2"
+ DOMU1_VCPU_PIN ?= "cpus = [\"1\", \"2\"]"
+ DOMU1_MPAM ?= "mpam = [\"slc=0xc0\"]"
+ DOMU1_SVE ?= "sve = \"${DOMU_SVE_SETTING}\""
+-DOMU1_PCI_PASSTHROUGH ?= "pci = [\"${DOMU1_PCI_ID}\"]"
++DOMU1_PCI_PASSTHROUGH ?= ""
+ DOMU1_EXTRA ?= "${DOMU1_BRIDGES}\\n${DOMU1_VCPU_PIN}\\n${DOMU1_MPAM}\\n${DOMU1_SVE}\\n${DOMU1_PCI_PASSTHROUGH}\\n"
+ 
+ DOMU2_BRIDGES ?= "vif = ['script=vif-openvswitch,bridge=ovsbr0,vifname=domu2.ext0', 'script=vif-openvswitch,bridge=brsi0.100,vifname=domu2.ethsi0', 'script=vif-openvswitch,bridge=brsi1.200,vifname=domu2.ethsi1', 'script=vif-openvswitch,bridge=brsi2.300,vifname=domu2.ethsi2']"
+diff --git a/yocto/meta-arm-auto-solutions/recipes-extended/xen-cfg/xen-cfg.bb b/yocto/meta-arm-auto-solutions/recipes-extended/xen-cfg/xen-cfg.bb
+index 4373dc4..227a965 100644
+--- a/yocto/meta-arm-auto-solutions/recipes-extended/xen-cfg/xen-cfg.bb
++++ b/yocto/meta-arm-auto-solutions/recipes-extended/xen-cfg/xen-cfg.bb
+@@ -25,7 +25,7 @@ do_install[noexec] = "1"
+ # Set Dom0 VCPU affinity, MPAM SLC, SVE2 config and Dom0 memory
+ DOM0_MEMORY_SIZE ?= "1024M"
+ DOM0_SVE_SETTING ?= "${@ '128' if d.getVar('SVE_DISABLE_FLAG', True) != '1' else '0'}"
+-EXTRA_XEN_CMDLINE_CONFIG ?= "maxcpus=4 dom0_max_vcpus=1 dom0_vcpus_pin dom0_mpam=slc:0xf iommu=yes dom0=sve=${DOM0_SVE_SETTING}"
++EXTRA_XEN_CMDLINE_CONFIG ?= "maxcpus=16 dom0_max_vcpus=16 dom0_vcpus_pin dom0_mpam=slc:0xf iommu=yes dom0=sve=${DOM0_SVE_SETTING}"
+ 
+ # Set Dom0 Static passthrough PCI AHCI SATA disk assignment
+ EXTRA_PCI_PASSTHROUGH_CONFIG ?= "xen-pciback.hide=(${DOMU1_PCI_ID})"
+diff --git a/yocto/meta-arm-bsp-extras/recipes-bsp/trusted-firmware-a/files/fvp-rd-kronos/rdkronos.dts b/yocto/meta-arm-bsp-extras/recipes-bsp/trusted-firmware-a/files/fvp-rd-kronos/rdkronos.dts
+index 65ff67b..1ff3b40 100644
+--- a/yocto/meta-arm-bsp-extras/recipes-bsp/trusted-firmware-a/files/fvp-rd-kronos/rdkronos.dts
++++ b/yocto/meta-arm-bsp-extras/recipes-bsp/trusted-firmware-a/files/fvp-rd-kronos/rdkronos.dts
+@@ -604,7 +604,7 @@
+ 		 * 0x7fbf 0000 - 0x7fbf ffff : FFA_SHARED_MM_BUF
+ 		 */
+ 		reg = <0x00000000 0x80000000 0 0x7fbf0000>,
+-			  <0x00000080 0x80000000 0 0x80000000>;
++			  <0x00000080 0x80000000 0x3 0x80000000>;
+ 	};
+ 
+ 	reserved-memory {
+@@ -721,6 +721,24 @@
+ 		#size-cells = <2>;
+ 		ranges;
+ 
++       framebuffer0: framebuffer@b000000000 {
++           compatible = "simple-framebuffer";
++           reg = <0x000000b0 0x00000000  0x00000000  0x007e9000>;
++           width = <1920>;
++           height = <1080>;
++           stride = <7680>;
++           format = "a8b8g8r8";
++           status="okay";
++        };
++
++
++       xhci@0x10000000 {
++            compatible = "generic-xhci";
++           reg = <0x0 0x10000000 0x0 0x10000>;
++           interrupts = <GIC_SPI 51 IRQ_TYPE_LEVEL_HIGH>;
++           status="okay";
++       };
++
+ 		timer@2a810000 {
+ 			compatible = "arm,armv7-timer-mem";
+ 			reg = <0x0 0x2a810000 0 0x10000>;
+diff --git a/yocto/meta-arm-bsp-extras/recipes-bsp/trusted-firmware-m/trusted-firmware-m-fvp-rd-kronos.inc b/yocto/meta-arm-bsp-extras/recipes-bsp/trusted-firmware-m/trusted-firmware-m-fvp-rd-kronos.inc
+index 4b4c5fa..3b7bca0 100644
+--- a/yocto/meta-arm-bsp-extras/recipes-bsp/trusted-firmware-m/trusted-firmware-m-fvp-rd-kronos.inc
++++ b/yocto/meta-arm-bsp-extras/recipes-bsp/trusted-firmware-m/trusted-firmware-m-fvp-rd-kronos.inc
+@@ -72,7 +72,7 @@ SRC_URI += "\
+     file://0059-Kronos-Enlarge-the-payload-size-of-rss_comms-message.patch \
+     file://0060-Platform-Kronos-Increase-buffers-for-EFI-vars.patch \
+     file://0061-Platform-Kronos-Power-on-all-the-Fainlight-GIC-redis.patch \
+-    file://0062-rss-driver-Fix-computation-of-GIC-IVIEWRn.patch \
++    file://0062-rss-driver-Fix-computation-of-GIC-IVIEWRn.patch;apply=yes \
+     file://0063-Platform-Kronos-Configure-RSS-MPU.patch \
+     file://0064-Fix-Increased-variable-sizes-for-assets-and-crypt-bu.patch \
+     file://0065-SPM-Record-schedule-attempt-in-PendSV-if-scheduler-i.patch \
+diff --git a/yocto/meta-arm-bsp-extras/recipes-kernel/linux/arm-platforms-extra-kmeta/bsp/arm-platforms-extra/fvp-rd-kronos.cfg b/yocto/meta-arm-bsp-extras/recipes-kernel/linux/arm-platforms-extra-kmeta/bsp/arm-platforms-extra/fvp-rd-kronos.cfg
+index c75d99b..9f98e23 100644
+--- a/yocto/meta-arm-bsp-extras/recipes-kernel/linux/arm-platforms-extra-kmeta/bsp/arm-platforms-extra/fvp-rd-kronos.cfg
++++ b/yocto/meta-arm-bsp-extras/recipes-kernel/linux/arm-platforms-extra-kmeta/bsp/arm-platforms-extra/fvp-rd-kronos.cfg
+@@ -24,3 +24,21 @@ CONFIG_MMC_ARMMMCI=y
+ # OP-TEE
+ CONFIG_TEE=y
+ CONFIG_OPTEE=y
++
++#Framebuffer
++CONFIG_FB=y
++CONFIG_FB_SIMPLE=y
++
++#For mousekeyboard
++CONFIG_USB_COMMON=y
++CONFIG_USB_HID=y
++CONFIG_USB=y
++
++CONFIG_USB_XHCI_HCD=y
++CONFIG_USB_XHCI_PCI=y
++CONFIG_USB_XHCI_PLATFORM=y
++
++CONFIG_USB_DEFAULT_PERSIST=y
++CONFIG_USB_AUTOSUSPEND_DELAY=2
++
++CONFIG_USB_NET_DRIVERS=y
+diff --git a/yocto/meta-arm-bsp-extras/wic/fvp-rd-kronos-efi-disk.wks.in b/yocto/meta-arm-bsp-extras/wic/fvp-rd-kronos-efi-disk.wks.in
+index 442fc8f..6a44775 100644
+--- a/yocto/meta-arm-bsp-extras/wic/fvp-rd-kronos-efi-disk.wks.in
++++ b/yocto/meta-arm-bsp-extras/wic/fvp-rd-kronos-efi-disk.wks.in
+@@ -6,6 +6,6 @@
+ 
+ part /boot --label boot --active --align 1024 --size 64M --use-uuid --part-type EF00 --source bootimg-efi --sourceparams="loader=${EFI_PROVIDER}"
+ 
+-part / --label root --align 1024 --use-uuid --source rootfs --fstype=ext4
++part / --label root --align 1024 --use-uuid --source rootfs --fstype=ext4 --fixed-size 31G
+ 
+ bootloader --ptable gpt --timeout=1 --append="${GRUB_LINUX_APPEND}"
+-- 
+2.43.0
+
