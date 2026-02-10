@@ -1,6 +1,6 @@
 # Arm Open AD Kit (OADK) Build and Deployment Scripts
 
-This repository provides scripts to help you **build and deploy the Arm Open AD Kit (OADK) demo** on **Arm-based virtual platforms** that support **Arm’s Shift-Left Strategy**.
+This repository provides scripts and yocto patches to help you **build and deploy the Arm Open AD Kit (OADK) demo** on **Arm-based virtual platforms** that support **Arm’s Shift-Left Strategy**.
 
 The **Arm Open AD Kit (OADK)** demo application is derived from the [Autoware Open AD Kit project](https://github.com/autowarefoundation/openadkit_demo) and ported to execute on various Arm and other platforms.  
 It provides a reference environment for evaluating autonomous driving workloads using containerized components on Arm architectures.
@@ -11,5 +11,6 @@ For a visual introduction to the OADK blueprint, watch the following overview vi
 ## Contents
 
 This repository includes the following build assets:
-- **Yocto patch** – customizes the Linux image for the OADK Planning-Control container by enabling Podman Compose, increasing CPU and memory support, and improving build configuration.
-- **Firmware packaging script** – creates a Corellium-compatible firmware image for use when deploying the OADK demo on Arm Virtual Platforms.
+- **Yocto patch 1** (0001-Configuration-of-OpenADKit.patch) – customizes the Linux image for the OADK Planning-Control container by enabling Podman Compose, increasing CPU and memory support, and improving build configuration.
+- **Yocto patch 2** (0002-actuation-module-si-r82-swrefstack.patch) - enables the Safety Island Actuation Module for Cortex®-R82 by adding a dedicated image feature, integrating the Zephyr application and CycloneDDS dependencies, and configuring networking and validation support.
+- **Firmware packaging script** (package_corellium_RD1-AE_V1.1.1.sh) – creates a Corellium-compatible firmware image for use when deploying the OADK demo on Arm Virtual Platforms.
