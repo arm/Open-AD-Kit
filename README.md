@@ -12,5 +12,6 @@ For a visual introduction to the OADK blueprint, watch the following overview vi
 
 This repository includes the following build assets:
 - **Yocto patch 1** (`0001-Configuration-of-OpenADKit.patch`) – customizes the Linux image for the OADK Planning-Control container by enabling Podman Compose, increasing CPU and memory support, and improving build configuration.
-- **Yocto patch 2** (`0002-actuation-module-si-r82-swrefstack.patch`) - enables the Safety Island Actuation Module for Cortex®-R82 by adding a dedicated image feature, integrating the Zephyr application and CycloneDDS dependencies, and configuring networking and validation support.
+- **Yocto patch 2** (`0002-actuation-module-si-r82-swrefstack.patch`) - enables the Safety Island Actuation Module for Cortex®-R82AE by adding a dedicated image feature, integrating the Zephyr application and CycloneDDS dependencies, and configuring networking and validation support.
+- **Yocto patch 3** (`0003-Add-recipe-for-deploying-the-actuation-demo-dockerfi.patch`) - Adds a new Yocto recipe (actuation-module-demo) that installs the actuation demo assets into the primary compute rootfs and includes a small Dockerfile patch to force use of bash (fixes Podman build issues).
 - **Firmware packaging script** (`package_corellium_RD1-AE_V1.1.1.sh`) – creates a Corellium-compatible firmware image for use when deploying the OADK demo on Arm Virtual Platforms.
