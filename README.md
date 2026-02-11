@@ -25,10 +25,10 @@ This repository includes the following Yocto patches, which customize the standa
 - **0003-RD1-AE-additional-applications.patch**  
   Adds `git` and `nano` to the image for development and debugging convenience.
 
-- **0004-Add-recipe-for-actuation-module-on-sicl2-R82AE.patch**  
+- **0004-RD1-AE-Add-recipe-for-actuation-module-on-sicl2-R82AE.patch**  
   Adds a new build configuration for the Actuation Module and patches the application for the SI-CL2 Cortex®-R82AE Safety Island platform.
 
-- **0005-Add-recipe-for-deploying-the-actuation-demo-dockerfiles.patch**  
+- **0005-RD1-AE-Add-recipe-for-deploying-the-actuation-demo-dockerfi.patch**  
   Adds a Yocto recipe to deploy the Actuation demo Dockerfiles and required assets into the primary compute root filesystem.
 
 This repository also includes the following firmware packaging script, which is required when running the OADK demo on the Corellium Arm Virtual Platform (RD1-AE):
