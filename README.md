@@ -26,7 +26,7 @@ This repository includes the following Yocto patches, which customize the standa
   Adds `git` and `nano` to the image for development and debugging convenience.
 
 - **0004-Add-recipe-for-actuation-module-on-sicl2-R82AE.patch**  
-  Adds a new build configuration for the Actuation Module and patches the application for the S-ICL2 Cortex®-R82AE Safety Island platform.
+  Adds a new build configuration for the Actuation Module and patches the application for the SI-CL2 Cortex®-R82AE Safety Island platform.
 
 - **0005-Add-recipe-for-deploying-the-actuation-demo-dockerfiles.patch**  
   Adds a Yocto recipe to deploy the Actuation demo Dockerfiles and required assets into the primary compute root filesystem.
