@@ -1,4 +1,4 @@
-# Arm Open AD Kit (OADK) – RD1-AE Build and Deployment Scripts
+# Open AD Kit (OADK) – Arm RD1-AE Build and Deployment Scripts
 
 This repository provides Yocto patches and supporting scripts to build and deploy **Open AD Kit (OADK) demos** on the **Arm RD1-AE Reference Design** platform.
 
