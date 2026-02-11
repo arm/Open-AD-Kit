@@ -1,0 +1,72 @@
+From c4b399d1a5475c70e0ce635282deb6650336e010 Mon Sep 17 00:00:00 2001
+From: Julien Jayat <julien.jayat@arm.com>
+Date: Wed, 11 Feb 2026 10:52:22 +0100
+Subject: [PATCH 1/5] RD1-AE: Add podman-compose support
+
+Patch the podman-compose recipe
+Add podman-compose to the image
+---
+ yocto/kas/arm-bsp-extras.yml                  |  9 +++++++
+ ...t-the-branch-name-for-podmad-compose.patch | 25 +++++++++++++++++++
+ 2 files changed, 34 insertions(+)
+ create mode 100644 yocto/kas/patches/meta-virtualization/0001-Correct-the-branch-name-for-podmad-compose.patch
+
+diff --git a/yocto/kas/arm-bsp-extras.yml b/yocto/kas/arm-bsp-extras.yml
+index 5042374..f097c48 100644
+--- a/yocto/kas/arm-bsp-extras.yml
++++ b/yocto/kas/arm-bsp-extras.yml
+@@ -27,6 +27,13 @@ repos:
+         path: "yocto/kas/patches/meta-arm/\
+           0001-arm-lib-Handle-timeout-for-spawn-object-on-stop.patch"
+ 
++  meta-virtualization:
++   path: layers/meta-virtualization
++   patches:
++     0001-Correct-the-branch-name-for-podmad-compose.patch:
++        repo: sw-ref-stack
++        path: "yocto/kas/patches/meta-virtualization/0001-Correct-the-branch-name-for-podmad-compose.patch"
++
+   meta-openembedded:
+     layers:
+       meta-python:
+@@ -55,4 +62,6 @@ local_conf_header:
+       ${@oe.utils.vartrue('ARM_FVP_EULA_ACCEPT', 'Arm-FVP-EULA', '', d)}"
+     IMAGE_CLASSES += "testimage"
+ 
++    # Add podman-compose    
++    CORE_IMAGE_EXTRA_INSTALL:append = " podman podman-compose"
+ distro: nodistro
+diff --git a/yocto/kas/patches/meta-virtualization/0001-Correct-the-branch-name-for-podmad-compose.patch b/yocto/kas/patches/meta-virtualization/0001-Correct-the-branch-name-for-podmad-compose.patch
+new file mode 100644
+index 0000000..6ef1658
+--- /dev/null
++++ b/yocto/kas/patches/meta-virtualization/0001-Correct-the-branch-name-for-podmad-compose.patch
+@@ -0,0 +1,25 @@
++From 4a60b2d8afe2d60dbea1096e82996793dbb13a34 Mon Sep 17 00:00:00 2001
++From: Ubuntu <ubuntu@ip-192-168-15-227.eu-west-1.compute.internal>
++Date: Thu, 27 Feb 2025 10:20:55 +0000
++Subject: [PATCH] Correct the branch name for podmad-compose
++
++---
++ recipes-containers/podman-compose/podman-compose_1.0.6.bb | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++diff --git a/recipes-containers/podman-compose/podman-compose_1.0.6.bb b/recipes-containers/podman-compose/podman-compose_1.0.6.bb
++index e055ee45..bcb2b86b 100644
++--- a/recipes-containers/podman-compose/podman-compose_1.0.6.bb
+++++ b/recipes-containers/podman-compose/podman-compose_1.0.6.bb
++@@ -4,7 +4,7 @@ LIC_FILES_CHKSUM = "file://LICENSE;md5=b234ee4d69f5fce4486a80fdaf4a4263"
++ 
++ inherit setuptools3
++ 
++-SRC_URI = "git://github.com/containers/podman-compose.git;branch=stable;protocol=https"
+++SRC_URI = "git://github.com/containers/podman-compose.git;branch=main;protocol=https"
++ 
++ SRCREV = "f6dbce36181c44d0d08b6f4ca166508542875ce1"
++ 
++-- 
++2.43.0
++
+-- 
+2.43.0
+

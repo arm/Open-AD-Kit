@@ -1,0 +1,610 @@
+From fb6193a70eb1dfa3dc0bc808ad28c2fcbce2a611 Mon Sep 17 00:00:00 2001
+From: Ubuntu <ubuntu@ip-192-168-15-227.eu-west-1.compute.internal>
+Date: Wed, 11 Feb 2026 11:04:27 +0000
+Subject: [PATCH 4/5] Add recipe for actuation module on sicl2 R82AE
+
+add new build configuration actuation module
+
+patch the application for this platfrom
+---
+ Kconfig                                       |  12 +-
+ yocto/kas/actuation-module.yml                |  13 +
+ .../arm_auto_solutions_image_features.bbclass |  49 ++-
+ .../0001-Remove-the-ZEPHYR_TARGET-check.patch |  30 ++
+ .../files/0002-actuation-module-si-r82.patch  | 290 ++++++++++++++++++
+ .../zephyr-kernel/zephyr-actuation-module.bb  |  67 ++++
+ 6 files changed, 451 insertions(+), 10 deletions(-)
+ create mode 100644 yocto/kas/actuation-module.yml
+ create mode 100644 yocto/meta-arm-auto-solutions/recipes-kernel/zephyr-kernel/files/0001-Remove-the-ZEPHYR_TARGET-check.patch
+ create mode 100644 yocto/meta-arm-auto-solutions/recipes-kernel/zephyr-kernel/files/0002-actuation-module-si-r82.patch
+ create mode 100644 yocto/meta-arm-auto-solutions/recipes-kernel/zephyr-kernel/zephyr-actuation-module.bb
+
+diff --git a/Kconfig b/Kconfig
+index 8e02f46..faab847 100644
+--- a/Kconfig
++++ b/Kconfig
+@@ -28,6 +28,9 @@ config EXTRA_IMAGE_FEATURES_CAM
+ config EXTRA_IMAGE_FEATURES_ACTUATION
+     bool "Safety Island Actuation Demo"
+ 
++config EXTRA_IMAGE_FEATURES_ACTUATION_MODULE
++    bool "Safety Island Actuation Module Demo "
++
+ config EXTRA_IMAGE_FEATURES_HIPC
+     bool "Safety Island Communication Demo (using HIPC)"
+ 
+@@ -59,7 +62,7 @@ config USE_CASE_LINUX_DISTRO_FEDORA
+ endchoice
+ 
+ choice
+-    depends on EXTRA_IMAGE_FEATURES_CAM || EXTRA_IMAGE_FEATURES_ACTUATION || EXTRA_IMAGE_FEATURES_HIPC || EXTRA_IMAGE_FEATURES_SI_PSA_STORAGE_TESTS || EXTRA_IMAGE_FEATURES_SI_PSA_CRYPTO_TESTS
++    depends on EXTRA_IMAGE_FEATURES_CAM || EXTRA_IMAGE_FEATURES_ACTUATION || EXTRA_IMAGE_FEATURES_ACTUATION_MODULE || EXTRA_IMAGE_FEATURES_HIPC || EXTRA_IMAGE_FEATURES_SI_PSA_STORAGE_TESTS || EXTRA_IMAGE_FEATURES_SI_PSA_CRYPTO_TESTS
+     prompt "Reference Software Stack Architecture"
+     default ARCHITECTURE_BAREMETAL
+ 
+@@ -67,16 +70,16 @@ config ARCHITECTURE_BAREMETAL
+     bool "Baremetal"
+ 
+ config ARCHITECTURE_VIRTUALIZATION
+-    depends on EXTRA_IMAGE_FEATURES_ACTUATION || EXTRA_IMAGE_FEATURES_HIPC || EXTRA_IMAGE_FEATURES_CAM
++    depends on EXTRA_IMAGE_FEATURES_ACTUATION || EXTRA_IMAGE_FEATURES_ACTUATION_MODULE || EXTRA_IMAGE_FEATURES_HIPC || EXTRA_IMAGE_FEATURES_CAM
+     bool "Virtualization"
+ 
+ endchoice
+ 
+ comment "Runtime Validation Setup"
+-    depends on EXTRA_IMAGE_FEATURES_CAM || EXTRA_IMAGE_FEATURES_ACTUATION || EXTRA_IMAGE_FEATURES_HIPC || EXTRA_IMAGE_FEATURES_SI_PSA_STORAGE_TESTS || EXTRA_IMAGE_FEATURES_SI_PSA_CRYPTO_TESTS
++    depends on EXTRA_IMAGE_FEATURES_CAM || EXTRA_IMAGE_FEATURES_ACTUATION || EXTRA_IMAGE_FEATURES_ACTUATION_MODULE || EXTRA_IMAGE_FEATURES_HIPC || EXTRA_IMAGE_FEATURES_SI_PSA_STORAGE_TESTS || EXTRA_IMAGE_FEATURES_SI_PSA_CRYPTO_TESTS
+ 
+ config RUN_TESTS
+-    depends on EXTRA_IMAGE_FEATURES_CAM || EXTRA_IMAGE_FEATURES_ACTUATION || EXTRA_IMAGE_FEATURES_HIPC || EXTRA_IMAGE_FEATURES_SI_PSA_STORAGE_TESTS || EXTRA_IMAGE_FEATURES_SI_PSA_CRYPTO_TESTS
++    depends on EXTRA_IMAGE_FEATURES_CAM || EXTRA_IMAGE_FEATURES_ACTUATION || EXTRA_IMAGE_FEATURES_ACTUATION_MODULE || EXTRA_IMAGE_FEATURES_HIPC || EXTRA_IMAGE_FEATURES_SI_PSA_STORAGE_TESTS || EXTRA_IMAGE_FEATURES_SI_PSA_CRYPTO_TESTS
+     bool "Run Automated Validation"
+     default n
+ 
+@@ -114,6 +117,7 @@ config KAS_INCLUDE_APPLICATION
+     string
+     default "yocto/kas/cam.yml" if EXTRA_IMAGE_FEATURES_CAM
+     default "yocto/kas/actuation.yml" if EXTRA_IMAGE_FEATURES_ACTUATION
++    default "yocto/kas/actuation-module.yml" if EXTRA_IMAGE_FEATURES_ACTUATION_MODULE
+     default "yocto/kas/hipc-validation.yml" if EXTRA_IMAGE_FEATURES_HIPC
+     default "yocto/kas/si-psa-storage-tests.yml" if EXTRA_IMAGE_FEATURES_SI_PSA_STORAGE_TESTS
+     default "yocto/kas/si-psa-crypto-tests.yml" if EXTRA_IMAGE_FEATURES_SI_PSA_CRYPTO_TESTS
+diff --git a/yocto/kas/actuation-module.yml b/yocto/kas/actuation-module.yml
+new file mode 100644
+index 0000000..7f83c59
+--- /dev/null
++++ b/yocto/kas/actuation-module.yml
+@@ -0,0 +1,13 @@
++#
++# SPDX-FileCopyrightText: <text>Copyright 2025 Arm Limited and/or its
++# affiliates <open-source-office@arm.com></text>
++#
++# SPDX-License-Identifier: MIT
++
++---
++header:
++  version: 16
++
++local_conf_header:
++  actuation-module: |
++    EXTRA_IMAGE_FEATURES:append = " actuation_module"
+diff --git a/yocto/meta-arm-auto-solutions/classes/arm_auto_solutions_image_features.bbclass b/yocto/meta-arm-auto-solutions/classes/arm_auto_solutions_image_features.bbclass
+index d513429..1461cf2 100644
+--- a/yocto/meta-arm-auto-solutions/classes/arm_auto_solutions_image_features.bbclass
++++ b/yocto/meta-arm-auto-solutions/classes/arm_auto_solutions_image_features.bbclass
+@@ -24,6 +24,9 @@ OVERRIDES:append = "${@bb.utils.contains('EXTRA_IMAGE_FEATURES', \
+ OVERRIDES:append = "${@bb.utils.contains('EXTRA_IMAGE_FEATURES', \
+                     'actuation', ':actuation', '', d)}"
+ 
++OVERRIDES:append = "${@bb.utils.contains('EXTRA_IMAGE_FEATURES', \
++                    'actuation_module', ':actuation_module', '', d)}"
++
+ OVERRIDES:append = "${@bb.utils.contains('EXTRA_IMAGE_FEATURES', \
+                     'cam', ':cam', '', d)}"
+ 
+@@ -48,6 +51,7 @@ IMAGE_FEATURES[validitems] += " \
+     virtualization \
+     domu \
+     actuation \
++    actuation_module \
+     si0-bridge-ethernet0 \
+     cam \
+     si-psa-storage-tests \
+@@ -60,13 +64,14 @@ DOMU_INSTANCES ?= "2"
+ IMAGE_FEATURES_CONFLICTS_baremetal = "virtualization domu"
+ IMAGE_FEATURES_CONFLICTS_virtualization = "baremetal domu"
+ IMAGE_FEATURES_CONFLICTS_domu = "baremetal virtualization"
+-IMAGE_FEATURES_CONFLICTS_hipc-validation = "si0-bridge-ethernet0 actuation cam si-psa-storage-tests si-psa-crypto-tests"
+-IMAGE_FEATURES_CONFLICTS_actuation = "si0-bridge-ethernet0 hipc-validation cam si-psa-storage-tests si-psa-crypto-tests"
+-IMAGE_FEATURES_CONFLICTS_si0-bridge-ethernet0 = "hipc-validation actuation cam si-psa-storage-tests si-psa-crypto-tests"
++IMAGE_FEATURES_CONFLICTS_hipc-validation = "si0-bridge-ethernet0 actuation actuation_module cam si-psa-storage-tests si-psa-crypto-tests"
++IMAGE_FEATURES_CONFLICTS_actuation = "si0-bridge-ethernet0 hipc-validation actuation_module cam si-psa-storage-tests si-psa-crypto-tests"
++IMAGE_FEATURES_CONFLICTS_actuation_module = "si0-bridge-ethernet0 hipc-validation cam si-psa-storage-tests si-psa-crypto-tests actuation"
++IMAGE_FEATURES_CONFLICTS_si0-bridge-ethernet0 = "hipc-validation actuation actuation_module cam si-psa-storage-tests si-psa-crypto-tests"
+ IMAGE_FEATURES_CONFLICTS_cam = \
+-    "si0-bridge-ethernet0 hipc-validation actuation si-psa-storage-tests si-psa-crypto-tests"
+-IMAGE_FEATURES_CONFLICTS_si-psa-storage-tests = "hipc-validation actuation si0-bridge-ethernet0 cam si-psa-crypto-tests"
+-IMAGE_FEATURES_CONFLICTS_si-psa-crypto-tests = "hipc-validation actuation si0-bridge-ethernet0 cam si-psa-storage-tests"
++    "si0-bridge-ethernet0 hipc-validation actuation actuation_module si-psa-storage-tests si-psa-crypto-tests"
++IMAGE_FEATURES_CONFLICTS_si-psa-storage-tests = "hipc-validation actuation actuation_module si0-bridge-ethernet0 cam si-psa-crypto-tests"
++IMAGE_FEATURES_CONFLICTS_si-psa-crypto-tests = "hipc-validation actuation actuation_module si0-bridge-ethernet0 cam si-psa-storage-tests"
+ 
+ FEATURE_PACKAGES_COMMON = " \
+     arm-si-rproc-mod \
+@@ -107,12 +112,17 @@ ACTUATION_PACKAGES ?= "actuation-player"
+ FEATURE_PACKAGES_actuation = "${ACTUATION_PACKAGES}"
+ FEATURE_PACKAGES_actuation:virtualization = ""
+ 
++ACTUATION_MODULE_PACKAGES ?= "${ACTUATION_PACKAGES}"
++FEATURE_PACKAGES_actuation_module = "${ACTUATION_MODULE_PACKAGES}"
++FEATURE_PACKAGES_actuation_module:virtualization = ""
++
+ CAM_PACKAGES ?= "cam-app-example cam-tool linuxptp"
+ FEATURE_PACKAGES_cam = "${CAM_PACKAGES}"
+ FEATURE_PACKAGES_cam:virtualization = "linuxptp"
+ 
+ ARM_AUTO_SOLUTIONS_EXTRA_IMAGEDEPENDS = ""
+ ARM_AUTO_SOLUTIONS_EXTRA_IMAGEDEPENDS:actuation = "packet-analyzer-native:do_addto_recipe_sysroot"
++ARM_AUTO_SOLUTIONS_EXTRA_IMAGEDEPENDS:actuation_module = "packet-analyzer-native:do_addto_recipe_sysroot"
+ 
+ EXTRA_IMAGEDEPENDS:append:baremetal = " ${ARM_AUTO_SOLUTIONS_EXTRA_IMAGEDEPENDS}"
+ EXTRA_IMAGEDEPENDS:append:virtualization = " ${ARM_AUTO_SOLUTIONS_EXTRA_IMAGEDEPENDS}"
+@@ -128,15 +138,18 @@ VIRTUAL-RUNTIME_security_provider:virtualization = "sw-provider"
+ VIRTUAL-RUNTIME_security_provider:domu = "sw-provider"
+ 
+ ZEPHYR_APP_SAFETY_ISLAND_CL0:actuation = "bridge"
++ZEPHYR_APP_SAFETY_ISLAND_CL0:actuation_module = "bridge"
+ ZEPHYR_APP_SAFETY_ISLAND_CL0:si0-bridge-ethernet0 = "bridge"
+ ZEPHYR_APP_SAFETY_ISLAND_CL0:hipc-validation = "zperf"
+ ZEPHYR_APP_SAFETY_ISLAND_CL0:si-psa-crypto-tests = "psa-crypto-tests"
+ ZEPHYR_APP_SAFETY_ISLAND_CL1:actuation = "fault-mgmt"
++ZEPHYR_APP_SAFETY_ISLAND_CL1:actuation_module = "fault-mgmt"
+ ZEPHYR_APP_SAFETY_ISLAND_CL1:cam = "cam"
+ ZEPHYR_APP_SAFETY_ISLAND_CL1:hipc-validation = "zperf"
+ ZEPHYR_APP_SAFETY_ISLAND_CL1:si0-bridge-ethernet0 = "zperf"
+ ZEPHYR_APP_SAFETY_ISLAND_CL1:si-psa-crypto-tests = "psa-crypto-tests"
+ ZEPHYR_APP_SAFETY_ISLAND_CL2:actuation = "actuation"
++ZEPHYR_APP_SAFETY_ISLAND_CL2:actuation_module = "actuation-module"
+ ZEPHYR_APP_SAFETY_ISLAND_CL2:hipc-validation = "zperf"
+ ZEPHYR_APP_SAFETY_ISLAND_CL2:si0-bridge-ethernet0 = "zperf"
+ ZEPHYR_APP_SAFETY_ISLAND_CL2:si-psa-storage-tests = "psa-storage-tests"
+@@ -194,6 +207,30 @@ TEST_SUITES:remove:actuation:virtualization = " \
+     test_10_fault_mgmt \
+     "
+ 
++TEST_SUITES:actuation_module = " \
++    ping \
++    ssh \
++    test_00_rse \
++    test_00_secure_partition \
++    fvp_boot \
++    test_10_fault_mgmt \
++    test_10_linuxboot \
++    test_10_linuxlogin \
++    test_10_safety_island_c2 \
++    test_20_fvp_devices \
++    test_40_parsec \
++    test_40_sve \
++    test_30_actuation \
++    test_99_linuxshutdown \
++    "
++TEST_SUITES:append:actuation_module:virtualization = " \
++    test_40_virtualization \
++    "
++TEST_SUITES:remove:actuation_module:virtualization = " \
++    test_00_secure_partition \
++    test_10_fault_mgmt \
++    "
++
+ TEST_SUITES:hipc-validation = " \
+     test_00_rse \
+     test_00_secure_partition \
+diff --git a/yocto/meta-arm-auto-solutions/recipes-kernel/zephyr-kernel/files/0001-Remove-the-ZEPHYR_TARGET-check.patch b/yocto/meta-arm-auto-solutions/recipes-kernel/zephyr-kernel/files/0001-Remove-the-ZEPHYR_TARGET-check.patch
+new file mode 100644
+index 0000000..717962e
+--- /dev/null
++++ b/yocto/meta-arm-auto-solutions/recipes-kernel/zephyr-kernel/files/0001-Remove-the-ZEPHYR_TARGET-check.patch
+@@ -0,0 +1,30 @@
++From ee1cedf3dca0b018537fc4003c7eaaa70aa75f81 Mon Sep 17 00:00:00 2001
++From: Julien Jayat <julien.jayat@arm.com>
++Date: Thu, 11 Dec 2025 16:28:13 +0100
++Subject: [PATCH] Remove the ZEPHYR_TARGET check define fabsl in all cases
++
++Upstream-Status: Inappropriate [expanding workaround to all]
++---
++ actuation_module/CMakeLists.txt | 2 --
++ 1 file changed, 2 deletions(-)
++
++diff --git a/actuation_module/CMakeLists.txt b/actuation_module/CMakeLists.txt
++index 4aa7e31..fea92b3 100644
++--- a/actuation_module/CMakeLists.txt
+++++ b/actuation_module/CMakeLists.txt
++@@ -60,12 +60,10 @@ message("App headers: ${APP_INCLUDE_DIRS}")
++ #   EIGEN_DONT_ALIGN_STATICALLY
++ # )
++ 
++-if(ZEPHYR_TARGET STREQUAL "fvp_baser_aemv8r_smp")
++ # NOTE: we dont have fabsl in zephyr for fvp builds, so we provide a substitute
++ target_compile_options(app PRIVATE 
++   "-Dfabsl(x)=((long double)fabs((double)(x)))"
++ )
++-endif()
++ 
++ target_include_directories(app PRIVATE
++   include
++-- 
++2.34.1
++
+diff --git a/yocto/meta-arm-auto-solutions/recipes-kernel/zephyr-kernel/files/0002-actuation-module-si-r82.patch b/yocto/meta-arm-auto-solutions/recipes-kernel/zephyr-kernel/files/0002-actuation-module-si-r82.patch
+new file mode 100644
+index 0000000..20eee3f
+--- /dev/null
++++ b/yocto/meta-arm-auto-solutions/recipes-kernel/zephyr-kernel/files/0002-actuation-module-si-r82.patch
+@@ -0,0 +1,290 @@
++From ee1cedf3dca0b018537fc4003c7eaaa70aa75f81 Mon Sep 17 00:00:00 2001
++From: Venkateswarlu Borra <venkateswarlu.borra@arm.com>
++Date: Fri, 06 Feb 2026 16:28:13 +0100
++Subject: [PATCH] Adapt Actuataor Module worrking for SI R82
++
++Upstream-Status: Inappropriate [expanding workaround to all]
++
++diff --git a/actuation_module/prj_actuation.conf b/actuation_module/prj_actuation.conf
++index 1918244..9d5fae4 100644
++--- a/actuation_module/prj_actuation.conf
+++++ b/actuation_module/prj_actuation.conf
++@@ -1,86 +1,81 @@
++-# Copyright (c) 2024-2025, Arm Limited.
+++# Copyright (c) 2022-2023, Arm Limited.
++ # SPDX-License-Identifier: Apache-2.0
++ 
++-# Log config
++-CONFIG_LOG=y
++-CONFIG_UART_CONSOLE=y
++-CONFIG_UART_INTERRUPT_DRIVEN=y
++-CONFIG_BOOT_BANNER=y
++-CONFIG_NET_LOG=y
++-
++-# Debug network logging
++-# CONFIG_NET_CORE_LOG_LEVEL_DBG=y
++-# CONFIG_LOG_DEFAULT_LEVEL=3
++-
++-# Shell config
++-# CONFIG_SHELL=y
++-# CONFIG_SHELL_BACKEND_SERIAL=y
++-# CONFIG_DEVICE_SHELL=y
++-# CONFIG_NET_SHELL=y
++-
++-# SNTP config
++-CONFIG_DNS_RESOLVER=y
++-CONFIG_SNTP=y
++-CONFIG_SNTP_LOG_LEVEL_INF=y
+++# General config
+++CONFIG_NEWLIB_LIBC=y
+++CONFIG_NEWLIB_LIBC_NANO=n
+++CONFIG_POSIX_API=y
++ 
++ # Networking config
++ CONFIG_NETWORKING=y
++-CONFIG_NET_L2_ETHERNET=y
++-CONFIG_NET_MAX_CONN=200
+++CONFIG_NET_MAX_CONN=10
++ CONFIG_NET_IPV4=y
++ CONFIG_NET_IPV6=n
++-# enable preemptive threads for network
++-CONFIG_NET_TC_THREAD_PREEMPTIVE=y
++-
++ CONFIG_NET_SOCKETS_PACKET=y
++ CONFIG_NET_SOCKETS_PACKET_DGRAM=y
++ CONFIG_NET_SOCKETPAIR=y
++-CONFIG_NET_HOSTNAME_ENABLE=y
++-CONFIG_NET_SOCKETS=y
++-CONFIG_NET_SOCKETS_POLL_MAX=256
++ 
++ CONFIG_NET_UDP=y
++ CONFIG_NET_UDP_CHECKSUM=y
++ 
++-# DHCP
++-CONFIG_NET_DHCPV4=y
++-CONFIG_NET_DHCPV4_INITIAL_DELAY_MAX=10
++-
++-# Network stack and buffer sizes
++-CONFIG_NET_RX_STACK_SIZE=16384
++-CONFIG_NET_TX_STACK_SIZE=16384
++-CONFIG_NET_PKT_RX_COUNT=32
++-CONFIG_NET_PKT_TX_COUNT=32
++-CONFIG_NET_BUF_TX_COUNT=256
++-CONFIG_NET_BUF_RX_COUNT=256
++-CONFIG_NET_BUF_DATA_SIZE=1600
+++CONFIG_NET_TCP=y
+++CONFIG_NET_TCP_ISN_RFC6528=n
+++CONFIG_NET_TCP_WORKQ_STACK_SIZE=4096
+++
+++CONFIG_NET_SOCKETS=y
+++CONFIG_NET_SOCKETS_POLL_MAX=6
+++
+++CONFIG_NET_RX_STACK_SIZE=4096
+++CONFIG_NET_PKT_RX_COUNT=128
+++CONFIG_NET_PKT_TX_COUNT=128
+++CONFIG_NET_BUF_TX_COUNT=128
+++CONFIG_NET_BUF_DATA_SIZE=2048
+++CONFIG_NET_BUF_RX_COUNT=128
++ CONFIG_NET_CONTEXT_NET_PKT_POOL=y
++-CONFIG_NET_MAX_CONTEXTS=25
+++CONFIG_NET_MAX_CONTEXTS=20
+++
+++CONFIG_THREAD_LOCAL_STORAGE=y
++ 
++ # Network address config
++ CONFIG_NET_CONFIG_SETTINGS=y
++ CONFIG_NET_MGMT=y
++-CONFIG_NET_MGMT_EVENT_STACK_SIZE=16384
+++CONFIG_NET_MGMT_EVENT_STACK_SIZE=4096
++ 
++ # Thread config
++-CONFIG_MAX_PTHREAD_COUNT=20
+++CONFIG_MAX_PTHREAD_COUNT=16
++ CONFIG_MAX_PTHREAD_MUTEX_COUNT=12000
++ CONFIG_MAX_PTHREAD_COND_COUNT=127
++-CONFIG_MAX_PTHREAD_KEY_COUNT=6
+++CONFIG_MAX_PTHREAD_KEY_COUNT=5
++ CONFIG_THREAD_NAME=y
++-CONFIG_MAX_THREAD_BYTES=8
++-CONFIG_THREAD_MAX_NAME_LEN=64
++-CONFIG_THREAD_LOCAL_STORAGE=y
++-CONFIG_PTHREAD_COND_LOG_LEVEL_OFF=y
++-CONFIG_IDLE_STACK_SIZE=16384
++-CONFIG_MAIN_STACK_SIZE=32768
++-CONFIG_SYSTEM_WORKQUEUE_STACK_SIZE=32768
++-CONFIG_ISR_STACK_SIZE=4096
++-CONFIG_PRIVILEGED_STACK_SIZE=4096
++-
++-# Random Number Generator
+++CONFIG_THREAD_MAX_NAME_LEN=32
+++
+++CONFIG_IDLE_STACK_SIZE=4096
+++CONFIG_MAIN_STACK_SIZE=4096
+++CONFIG_SYSTEM_WORKQUEUE_STACK_SIZE=4096
+++
+++# Misc. config
++ CONFIG_TEST_RANDOM_GENERATOR=y
++ 
+++# Memory config
+++CONFIG_NEWLIB_LIBC_MIN_REQUIRED_HEAP_SIZE=524288
+++
+++# C++ config
+++CONFIG_CPP=y
+++CONFIG_STD_CPP14=y
+++CONFIG_GLIBCXX_LIBCPP=y
+++CONFIG_CPP_EXCEPTIONS=y
+++CONFIG_CPP_RTTI=y
+++
+++# Printf config
+++CONFIG_CBPRINTF_FP_SUPPORT=y
+++
+++# Experimental config
+++CONFIG_NET_TC_THREAD_PREEMPTIVE=y
+++
+++CONFIG_NET_L2_ETHERNET=y
+++
+++
+++
++ # General config
++ CONFIG_NEWLIB_LIBC=y
++ CONFIG_NEWLIB_LIBC_MIN_REQUIRED_HEAP_SIZE=1048576
++@@ -93,19 +88,4 @@ CONFIG_STD_CPP17=y
++ CONFIG_GLIBCXX_LIBCPP=y
++ CONFIG_CPP_EXCEPTIONS=y
++ CONFIG_CPP_RTTI=y
++-CONFIG_CBPRINTF_FP_SUPPORT=y
++-
++-# SMP: Symmetric multiprocessing
++-# TODO: We can try SMP enabled.
++-CONFIG_SMP=n
++-
++- # TODO: Check if this is required
++-# CONFIG_NET_PROMISCUOUS_MODE=y # for ipv4 multicast
++-
++-# NOTE: Disabled TCP for network performance
++-# CONFIG_NET_TCP=y
++-# CONFIG_NET_TCP_ISN_RFC6528=n
++-# CONFIG_NET_TCP_WORKQ_STACK_SIZE=4096
++-# NOTE: Disabled the fragmenting of packets for network performance
++-# CONFIG_NET_IPV4_FRAGMENT=y
++-# CONFIG_NET_IPV4_FRAGMENT_TIMEOUT=5
+++CONFIG_CBPRINTF_FP_SUPPORT=y
++\ No newline at end of file
++diff --git a/actuation_module/src/main.cpp b/actuation_module/src/main.cpp
++index 40a10eb..26d4c95 100644
++--- a/actuation_module/src/main.cpp
+++++ b/actuation_module/src/main.cpp
++@@ -3,6 +3,7 @@
++ 
++ #include "common/clock/clock.hpp"
++ #include "common/logger/logger.hpp"
+++#include "common/dds/network_config.hpp"
++ using namespace common::logger;
++ 
++ #include "autoware/trajectory_follower_node/controller_node.hpp"
++@@ -14,8 +15,11 @@ int main(void)
++     log_success("-----------------------------------------");
++     log_success("ARM - Autoware: Actuation Safety Island");
++     log_success("-----------------------------------------");
++-    log_info("Waiting for DHCP to get IP address...");
++-    sleep(CONFIG_NET_DHCPV4_INITIAL_DELAY_MAX);
+++    log_info("Waiting for TCP to get IP address...");
+++    configure_network();
+++    #ifdef CONFIG_NET_DHCPV4
+++        sleep(CONFIG_NET_DHCPV4_INITIAL_DELAY_MAX);
+++    #endif
++ 
++     // TODO: Disable SNTP if no internet connection is available
++ #ifdef CONFIG_ENABLE_SNTP
++diff --git a/actuation_module/test/dds_pub.cpp b/actuation_module/test/dds_pub.cpp
++index d12e2b2..fd9d5fe 100644
++--- a/actuation_module/test/dds_pub.cpp
+++++ b/actuation_module/test/dds_pub.cpp
++@@ -1,6 +1,7 @@
++ #include "common/node/node.hpp"
++ #include "common/clock/clock.hpp"
++ #include "common/logger/logger.hpp"
+++#include "common/dds/network_config.hpp"
++ using namespace common::logger;
++ 
++ // Msgs
++@@ -28,8 +29,11 @@ int main(void) {
++     log_info("--------------------------------\n");
++     log_info("Starting DDS publisher\n");
++     log_info("--------------------------------\n");
++-    log_info("Waiting for DHCP to get IP address...\n");
++-    sleep(CONFIG_NET_DHCPV4_INITIAL_DELAY_MAX);
+++    log_info("Waiting for TCP to get IP address...\n");
+++    configure_network();
+++    #ifdef CONFIG_NET_DHCPV4
+++        sleep(CONFIG_NET_DHCPV4_INITIAL_DELAY_MAX);
+++    #endif
++ 
++ #ifdef CONFIG_ENABLE_SNTP
++     if (Clock::init_clock_via_sntp() < 0) {
++diff --git a/actuation_module/test/dds_sub.cpp b/actuation_module/test/dds_sub.cpp
++index a183c6d..d7e799c 100644
++--- a/actuation_module/test/dds_sub.cpp
+++++ b/actuation_module/test/dds_sub.cpp
++@@ -2,6 +2,7 @@
++ #include "common/clock/clock.hpp"
++ #include "common/logger/logger.hpp"
++ #include "autoware/autoware_msgs/messages.hpp"
+++#include "common/dds/network_config.hpp"
++ using namespace common::logger;
++ 
++ // Stack sizes for node and timer threads
++@@ -63,8 +64,11 @@ int main(void) {
++     log_info("--------------------------------\n");
++     log_info("Starting DDS subscriber\n");
++     log_info("--------------------------------\n");
++-    log_info("Waiting for DHCP to get IP address...\n");
++-    sleep(CONFIG_NET_DHCPV4_INITIAL_DELAY_MAX);
+++    log_info("Waiting for TCP to get IP address...\n");
+++    configure_network();
+++    #ifdef CONFIG_NET_DHCPV4
+++        sleep(CONFIG_NET_DHCPV4_INITIAL_DELAY_MAX);
+++    #endif
++ 
++ #ifdef CONFIG_ENABLE_SNTP
++     if (Clock::init_clock_via_sntp() < 0) {
++diff --git a/actuation_module/test/unit_test.cpp b/actuation_module/test/unit_test.cpp
++index 19d0825..95196af 100644
++--- a/actuation_module/test/unit_test.cpp
+++++ b/actuation_module/test/unit_test.cpp
++@@ -8,6 +8,7 @@
++ #include "common/node/node.hpp"
++ #include "common/clock/clock.hpp"
++ #include "common/logger/logger.hpp"
+++#include "common/dds/network_config.hpp"
++ using namespace common::logger;
++ 
++ // Msgs
++@@ -223,7 +224,10 @@ static K_THREAD_STACK_DEFINE(node_stack, CONFIG_THREAD_STACK_SIZE);
++ int main() {
++     log_info("=== Starting Node Test Suite ===\n");
++     log_info("Waiting for Network interface to be ready\n");
++-    sleep(CONFIG_NET_DHCPV4_INITIAL_DELAY_MAX);
+++    configure_network();
+++    #ifdef CONFIG_NET_DHCPV4
+++        sleep(CONFIG_NET_DHCPV4_INITIAL_DELAY_MAX);
+++    #endif
++ 
++ #ifdef CONFIG_ENABLE_SNTP
++     if (Clock::init_clock_via_sntp() < 0) {
++diff --git a/demo/visualizer/Dockerfile b/demo/visualizer/Dockerfile
++index 1d47af5..d0be132 100644
++--- a/demo/visualizer/Dockerfile
+++++ b/demo/visualizer/Dockerfile
++@@ -36,9 +36,9 @@ RUN openssl req -x509 -nodes -newkey rsa:2048 \
++   -subj "/O=Autoware-OpenADKit/CN=localhost"
++ 
++ # hadolint ignore=SC1091
++-RUN source /opt/autoware/setup.bash \
+++RUN /bin/bash -c 'source /opt/autoware/setup.bash \
++   && RVIZ_PATH="$(ros2 pkg prefix --share autoware_launch)/rviz" \
++-  && cp -r "$RVIZ_PATH" /autoware/rviz
+++  && cp -r "$RVIZ_PATH" /autoware/rviz'
++ 
++ # Need to expose VNC and NoVNC ports when running the container
++ EXPOSE 5900 6080
+diff --git a/yocto/meta-arm-auto-solutions/recipes-kernel/zephyr-kernel/zephyr-actuation-module.bb b/yocto/meta-arm-auto-solutions/recipes-kernel/zephyr-kernel/zephyr-actuation-module.bb
+new file mode 100644
+index 0000000..659f26d
+--- /dev/null
++++ b/yocto/meta-arm-auto-solutions/recipes-kernel/zephyr-kernel/zephyr-actuation-module.bb
+@@ -0,0 +1,67 @@
++#
++# SPDX-FileCopyrightText: <text>Copyright 2025 Arm Limited and/or its
++# affiliates <open-source-office@arm.com></text>
++#
++# SPDX-License-Identifier: MIT
++
++SUMMARY = "Actuation Module Zephyr application"
++DESCRIPTION = "Autoware MPC/PID actuation module running on Zephyr with CycloneDDS transport."
++HOMEPAGE = "https://github.com/autowarefoundation/autoware"
++LICENSE = "Apache-2.0"
++LIC_FILES_CHKSUM = "file://license.rst;md5=e805dc5353977631b7881c7705a6c04a"
++
++require recipes-kernel/zephyr-kernel/zephyr-sample.inc
++#require recipes-demos/actuation/actuation-common.inc
++require recipes-demos/actuation/cyclonedds_0.10.3.inc
++
++
++DEPENDS += "\
++    ament-cmake-auto-native \
++    ament-cmake-python-native \
++    ament-cmake-target-dependencies-native \
++    cyclonedds-native \
++    libeigen-native \
++"
++
++# /* cspell:disable-next-line */
++BRANCH_ACTUATION_MODULE = "branch=main"
++SRC_URI_ACTUATION_MODULE = "git://github.com/oguzkaganozt/actuation_porting.git;${BRANCH_ACTUATION_MODULE};protocol=https"
++SRCREV_ACTUATION_MODULE = "b728a5cfd3fe0d8c477dcaa148cf3cc6767dfa8c"
++
++SRC_URI:append = " ${SRC_URI_ACTUATION_MODULE};name=actuation-module;destsuffix=git/modules/lib/actuation_module"
++SRC_URI:append = " ${SRC_URI_CYCLONEDDS};name=cyclonedds;destsuffix=git/modules/lib/actuation_module/cyclonedds"
++
++SRCREV_actuation-module = "${SRCREV_ACTUATION_MODULE}"
++SRCREV_cyclonedds = "${SRCREV_CYCLONEDDS}"
++
++
++FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
++
++SRC_URI:append = " file://0001-Remove-the-ZEPHYR_TARGET-check.patch;patchdir=modules/lib/actuation_module"
++SRC_URI:append = " file://0002-actuation-module-si-r82.patch;patchdir=modules/lib/actuation_module"
++
++# Default board (match existing demos)
++BOARD = "fvp_rd_kronos_safety_island_c2"
++ZEPHYR_BOARD = "${BOARD}"
++
++ZEPHYR_SRC_DIR = "${S}/modules/lib/actuation_module/actuation_module"
++
++OVERLAY_BASENAME_FILE = "${ZEPHYR_SAFETY_ISLAND_MODULE}/overlays/hipc/${BOARD}"
++OVERLAY_ACTUATION_BASENAME_FILE = "${ZEPHYR_SAFETY_ISLAND_MODULE}/apps/actuation/boards/${BOARD}_actuation"
++
++# Build-time switches for the test variants (match build.sh BUILD_TEST)
++# One “on” flag per test variant; no “off” flag
++PACKAGECONFIG ??= ""
++PACKAGECONFIG[unit-test]     = "-DBUILD_TEST=1,"
++PACKAGECONFIG[dds-publisher] = "-DBUILD_TEST=2,"
++PACKAGECONFIG[dds-subscriber]= "-DBUILD_TEST=3,"
++
++# Default to BUILD_TEST=0 when none of the above are selected
++EXTRA_OECMAKE:append = " \
++    -DCYCLONEDDS_SRC='${ZEPHYR_SRC_DIR}/../cyclonedds' \
++    -DDTC_OVERLAY_FILE='${OVERLAY_BASENAME_FILE}.overlay' \
++    -DOVERLAY_CONFIG='${OVERLAY_BASENAME_FILE}.conf;${OVERLAY_ACTUATION_BASENAME_FILE}.conf' \
++    ${@bb.utils.contains_any('PACKAGECONFIG', ['unit-test','dds-publisher','dds-subscriber'], '', '-DBUILD_TEST=0', d)} \
++    -DEXTRA_CFLAGS='-Wno-error' \
++    -DEXTRA_CXXFLAGS='-Wno-error' \
++"
+-- 
+2.43.0
+

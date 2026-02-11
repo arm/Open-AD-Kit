@@ -1,0 +1,30 @@
+From d8465ba7badd9cb32e83d352c2de924803f6a4b6 Mon Sep 17 00:00:00 2001
+From: Julien Jayat <julien.jayat@arm.com>
+Date: Wed, 11 Feb 2026 11:27:36 +0100
+Subject: [PATCH 3/5] RD1-AE: additional applications
+
+Add git and nano to the image.
+---
+ yocto/kas/arm-bsp-extras.yml | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/yocto/kas/arm-bsp-extras.yml b/yocto/kas/arm-bsp-extras.yml
+index f097c48..d4fc566 100644
+--- a/yocto/kas/arm-bsp-extras.yml
++++ b/yocto/kas/arm-bsp-extras.yml
+@@ -61,6 +61,12 @@ local_conf_header:
+     LICENSE_FLAGS_ACCEPTED:append = " \
+       ${@oe.utils.vartrue('ARM_FVP_EULA_ACCEPT', 'Arm-FVP-EULA', '', d)}"
+     IMAGE_CLASSES += "testimage"
++    # To enable docker + docker compose
++    #PACKAGECONFIG:remove:pn-docker-compose = "docker-plugin"
++    #CORE_IMAGE_EXTRA_INSTALL:append = " docker docker-compose "
++    #PACKAGE_EXCLUDE:append = "podman no-cloud "
++    
++    CORE_IMAGE_EXTRA_INSTALL:append = " git nano "
+ 
+     # Add podman-compose    
+     CORE_IMAGE_EXTRA_INSTALL:append = " podman podman-compose"
+-- 
+2.43.0
+

@@ -1,0 +1,138 @@
+From 591b1bfe2f7220d600c9d51899e4ea39f71b55a4 Mon Sep 17 00:00:00 2001
+From: Julien Jayat <julien.jayat@arm.com>
+Date: Mon, 9 Feb 2026 14:04:39 +0100
+Subject: [PATCH 5/5] Add recipe for deploying the actuation demo dockerfiles
+
+---
+ .../arm_auto_solutions_image_features.bbclass |  1 +
+ .../actuation/actuation-module-demo.bb        | 29 ++++++++++++++++
+ ...0001-Fix-Dockerfile-for-podman-build.patch | 34 +++++++++++++++++++
+ ...interface-to-brsi2-in-cyclonedds.xml.patch | 27 +++++++++++++++
+ 4 files changed, 91 insertions(+)
+ create mode 100644 yocto/meta-arm-auto-solutions/recipes-demos/actuation/actuation-module-demo.bb
+ create mode 100644 yocto/meta-arm-auto-solutions/recipes-demos/actuation/files/0001-Fix-Dockerfile-for-podman-build.patch
+ create mode 100644 yocto/meta-arm-auto-solutions/recipes-demos/actuation/files/0002-Change-the-interface-to-brsi2-in-cyclonedds.xml.patch
+
+diff --git a/yocto/meta-arm-auto-solutions/classes/arm_auto_solutions_image_features.bbclass b/yocto/meta-arm-auto-solutions/classes/arm_auto_solutions_image_features.bbclass
+index 1461cf2..088e27c 100644
+--- a/yocto/meta-arm-auto-solutions/classes/arm_auto_solutions_image_features.bbclass
++++ b/yocto/meta-arm-auto-solutions/classes/arm_auto_solutions_image_features.bbclass
+@@ -113,6 +113,7 @@ FEATURE_PACKAGES_actuation = "${ACTUATION_PACKAGES}"
+ FEATURE_PACKAGES_actuation:virtualization = ""
+ 
+ ACTUATION_MODULE_PACKAGES ?= "${ACTUATION_PACKAGES}"
++ACTUATION_MODULE_PACKAGES:append:actuation_module = " actuation-module-demo"
+ FEATURE_PACKAGES_actuation_module = "${ACTUATION_MODULE_PACKAGES}"
+ FEATURE_PACKAGES_actuation_module:virtualization = ""
+ 
+diff --git a/yocto/meta-arm-auto-solutions/recipes-demos/actuation/actuation-module-demo.bb b/yocto/meta-arm-auto-solutions/recipes-demos/actuation/actuation-module-demo.bb
+new file mode 100644
+index 0000000..9ab2da0
+--- /dev/null
++++ b/yocto/meta-arm-auto-solutions/recipes-demos/actuation/actuation-module-demo.bb
+@@ -0,0 +1,29 @@
++#
++# SPDX-FileCopyrightText: <text>Copyright 2025 Arm Limited and/or its
++# affiliates <open-source-office@arm.com></text>
++#
++# SPDX-License-Identifier: MIT
++
++SUMMARY = "Actuation porting demo content"
++DESCRIPTION = "Installs the demo assets from the actuation_porting repository into /demo on the target root filesystem."
++HOMEPAGE = "https://github.com/oguzkaganozt/actuation_porting"
++LICENSE = "Apache-2.0"
++LIC_FILES_CHKSUM = "file://license.rst;md5=e805dc5353977631b7881c7705a6c04a"
++
++SRC_URI = "git://github.com/oguzkaganozt/actuation_porting.git;branch=main;protocol=https"
++SRCREV = "b728a5cfd3fe0d8c477dcaa148cf3cc6767dfa8c"
++
++
++FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
++SRC_URI:append = " file://0001-Fix-Dockerfile-for-podman-build.patch"
++SRC_URI:append = " file://0002-Change-the-interface-to-brsi2-in-cyclonedds.xml.patch"
++
++S = "${WORKDIR}/git"
++
++# Copy the repo's demo directory to /root/demo in the target rootfs
++do_install() {
++    install -d ${D}/root/demo
++    cp -r ${S}/demo/. ${D}/root/demo/
++}
++
++FILES:${PN} += "/root/demo"
+diff --git a/yocto/meta-arm-auto-solutions/recipes-demos/actuation/files/0001-Fix-Dockerfile-for-podman-build.patch b/yocto/meta-arm-auto-solutions/recipes-demos/actuation/files/0001-Fix-Dockerfile-for-podman-build.patch
+new file mode 100644
+index 0000000..9e4e202
+--- /dev/null
++++ b/yocto/meta-arm-auto-solutions/recipes-demos/actuation/files/0001-Fix-Dockerfile-for-podman-build.patch
+@@ -0,0 +1,34 @@
++From 08967956cccbac0e223e6aa5020cd706fcd2b001 Mon Sep 17 00:00:00 2001
++From: Julien Jayat <julien.jayat@arm.com>
++Date: Mon, 9 Feb 2026 11:27:24 +0100
++Subject: [PATCH] Fix Dockerfile for podman build
++
++The version of podman version used for the demo doesn't uses the SHELL
++variable as expected.
++
++Force use a bash in the command to avoid using sh.
++
++Upstream-Status: Pending
++---
++ demo/visualizer/Dockerfile | 4 ++--
++ 1 file changed, 2 insertions(+), 2 deletions(-)
++
++diff --git a/demo/visualizer/Dockerfile b/demo/visualizer/Dockerfile
++index 1d47af5..5fe3447 100644
++--- a/demo/visualizer/Dockerfile
+++++ b/demo/visualizer/Dockerfile
++@@ -36,9 +36,9 @@ RUN openssl req -x509 -nodes -newkey rsa:2048 \
++   -subj "/O=Autoware-OpenADKit/CN=localhost"
++ 
++ # hadolint ignore=SC1091
++-RUN source /opt/autoware/setup.bash \
++-  && RVIZ_PATH="$(ros2 pkg prefix --share autoware_launch)/rviz" \
++-  && cp -r "$RVIZ_PATH" /autoware/rviz
+++RUN  /bin/bash -c 'source /opt/autoware/setup.bash \
+++  && RVIZ_PATH="$(ros2 pkg prefix --share autoware_launch)/rviz" \
+++  && cp -r "$RVIZ_PATH" /autoware/rviz'
++ 
++ # Need to expose VNC and NoVNC ports when running the container
++ EXPOSE 5900 6080
++-- 
++2.34.1
+diff --git a/yocto/meta-arm-auto-solutions/recipes-demos/actuation/files/0002-Change-the-interface-to-brsi2-in-cyclonedds.xml.patch b/yocto/meta-arm-auto-solutions/recipes-demos/actuation/files/0002-Change-the-interface-to-brsi2-in-cyclonedds.xml.patch
+new file mode 100644
+index 0000000..2085175
+--- /dev/null
++++ b/yocto/meta-arm-auto-solutions/recipes-demos/actuation/files/0002-Change-the-interface-to-brsi2-in-cyclonedds.xml.patch
+@@ -0,0 +1,27 @@
++From 35c450ce21e805da8f7ef3e76da2a0eef52eb8af Mon Sep 17 00:00:00 2001
++From: Julien Jayat <julien.jayat@arm.com>
++Date: Tue, 10 Feb 2026 12:01:41 +0100
++Subject: [PATCH 2/2] Change the interface to brsi2 in cyclonedds.xml
++
++To use the veth interface of the Safety island cluster 2
++
++Upstream-Status: Inappropriate [kronos-specific]
++---
++ demo/cyclonedds.xml | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++diff --git a/demo/cyclonedds.xml b/demo/cyclonedds.xml
++index 93cbd6d..e1d4e9e 100644
++--- a/demo/cyclonedds.xml
+++++ b/demo/cyclonedds.xml
++@@ -27,7 +27,7 @@
++       <AllowMulticast>spdp</AllowMulticast>
++       <MaxMessageSize>1400B</MaxMessageSize>  <!--Accommodate for Zephyr's MTU-->
++         <Interfaces>
++-            <NetworkInterface autodetermine="false" priority="default" multicast="default" name="tap0"/>  <!-- TODO: Change to the actual interface name to connect to the safety island -->
+++            <NetworkInterface autodetermine="false" priority="default" multicast="default" name="brsi2"/>  <!-- TODO: Change to the actual interface name to connect to the safety island -->
++         </Interfaces>
++     </General>
++ 
++-- 
++2.34.1
+-- 
+2.43.0
+

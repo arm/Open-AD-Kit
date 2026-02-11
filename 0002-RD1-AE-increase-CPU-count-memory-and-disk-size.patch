@@ -1,0 +1,54 @@
+From 90dd9ec5c8fa75e6db5a1b5c5cdfb210ab9a6939 Mon Sep 17 00:00:00 2001
+From: Julien Jayat <julien.jayat@arm.com>
+Date: Wed, 11 Feb 2026 11:25:04 +0100
+Subject: [PATCH 2/5] RD1-AE: increase CPU count, memory and disk size
+
+Increase the number of CPU used to 16
+Increase the DRAM size in the dts to 16GB and confiugre 16GB in the
+kernel command line.
+Request 8GB of free space in the rootfs (expected demo size is less that
+6GB.)
+---
+ yocto/kas/arm-auto-solutions.yml                          | 8 +++++---
+ .../trusted-firmware-a/files/fvp-rd-kronos/rdkronos.dts   | 2 +-
+ 2 files changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/yocto/kas/arm-auto-solutions.yml b/yocto/kas/arm-auto-solutions.yml
+index 8640276..ffffa0f 100644
+--- a/yocto/kas/arm-auto-solutions.yml
++++ b/yocto/kas/arm-auto-solutions.yml
+@@ -30,13 +30,15 @@ repos:
+ 
+ env:
+   TESTIMAGE_AUTO:
+-  SVE_DISABLE_FLAG:
+-  CASSINI_ROOTFS_EXTRA_SPACE:
+-  BAREMETAL_IMAGE_MEM_SIZE:
++  SVE_DISABLE_FLAG: "0"
++  CASSINI_ROOTFS_EXTRA_SPACE: "8000000"
++  BAREMETAL_IMAGE_MEM_SIZE: "16352M"
++  BAREMETAL_IMAGE_NUM_CPUS: "16"
+   DOM0_MEMORY_SIZE:
+   DOMU1_MEMORY_SIZE:
+   DOMU2_MEMORY_SIZE:
+ 
++
+ local_conf_header:
+   cassini: |
+     CASSINI_GENERIC_ARM64_FILESYSTEM = "0"
+diff --git a/yocto/meta-arm-bsp-extras/recipes-bsp/trusted-firmware-a/files/fvp-rd-kronos/rdkronos.dts b/yocto/meta-arm-bsp-extras/recipes-bsp/trusted-firmware-a/files/fvp-rd-kronos/rdkronos.dts
+index 65ff67b..5474c27 100644
+--- a/yocto/meta-arm-bsp-extras/recipes-bsp/trusted-firmware-a/files/fvp-rd-kronos/rdkronos.dts
++++ b/yocto/meta-arm-bsp-extras/recipes-bsp/trusted-firmware-a/files/fvp-rd-kronos/rdkronos.dts
+@@ -604,7 +604,7 @@
+ 		 * 0x7fbf 0000 - 0x7fbf ffff : FFA_SHARED_MM_BUF
+ 		 */
+ 		reg = <0x00000000 0x80000000 0 0x7fbf0000>,
+-			  <0x00000080 0x80000000 0 0x80000000>;
++			  <0x00000080 0x80000000 0x3 0x80000000>;
+ 	};
+ 
+ 	reserved-memory {
+-- 
+2.43.0
+
